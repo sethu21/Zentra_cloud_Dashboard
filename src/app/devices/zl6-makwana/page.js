@@ -45,9 +45,7 @@ function calculateCumulativeET(readings, field, multiplier) {
 }
 
 // New helper function to calculate the combined ET using the new formula.
-// For each interval, it computes the absolute change in water content for each port and multiplies:
-//   |Δ(port1_wc)| × 200 + |Δ(port2_wc)| × 150 + |Δ(port3_wc)| × 150,
-// then accumulates these values.
+// Combined ET = |Δ(port1_wc)|×200 + |Δ(port2_wc)|×150 + |Δ(port3_wc)|×150.
 function calculateCombinedET(readings) {
   let cumulative = 0;
   return readings.map((r, i) => {
@@ -61,16 +59,14 @@ function calculateCombinedET(readings) {
 }
 
 export default function ZL6MakwanaPage() {
-  const [date, setDate] = useState("");
+  // Initialize start and end date with today's date.
+  const [startDate, setStartDate] = useState(new Date().toISOString().split("T")[0]);
+  const [endDate, setEndDate] = useState(new Date().toISOString().split("T")[0]);
 
-  // Set default date to today.
-  useEffect(() => {
-    const today = new Date().toISOString().split("T")[0];
-    setDate(today);
-  }, []);
-
-  // Build API URL with the date query parameter.
-  const apiUrl = `/api/zentra/fetch-makwana?date=${date}`;
+  // Build API URL with the start and end date query parameters including time.
+  const apiUrl = `/api/zentra/fetch-makwana?start_date=${encodeURIComponent(
+    `${startDate} 00:00`
+  )}&end_date=${encodeURIComponent(`${endDate} 23:59`)}`;
   console.log("🟢 API Request Sent From Client:", apiUrl);
 
   const { data, error } = useSWR(apiUrl, fetcher, {
@@ -79,13 +75,12 @@ export default function ZL6MakwanaPage() {
     errorRetryCount: 0,
   });
 
-  if (!date) return <div>Loading date picker...</div>;
+  if (!startDate || !endDate) return <div>Loading date pickers...</div>;
   if (error)
     return <div style={{ color: "red" }}>Error loading data: {error.message}</div>;
   if (!data) return <div>Loading data...</div>;
 
-  // Assume our API returns an object with sensor types and readings.
-  // Group readings by timestamp and extract water content for each port.
+  // Group sensor readings by timestamp.
   const groupedData = {};
 
   function processSensorData(sensorType, parameterField) {
@@ -127,7 +122,7 @@ export default function ZL6MakwanaPage() {
     });
   }
 
-  // Process the sensor types.
+  // Process sensor data.
   processSensorData("Water Content", "wc");
   processSensorData("Saturation Extract EC", "se_ec");
   processSensorData("Soil Temperature", "temp");
@@ -135,17 +130,17 @@ export default function ZL6MakwanaPage() {
   // Convert grouped data into an array.
   const readings = Object.values(groupedData);
   if (readings.length === 0)
-    return <div>No data found for the selected date.</div>;
+    return <div>No data found for the selected date range.</div>;
 
   console.log("Fetched Readings:", readings);
 
-  // Compute individual cumulative ET values (if needed for separate display)
+  // Compute individual cumulative ET values.
   const port1CumET = calculateCumulativeET(readings, "port1_wc", 150);
   const port2CumET = calculateCumulativeET(readings, "port2_wc", 300);
   const port3CumET = calculateCumulativeET(readings, "port3_wc", 450);
 
   // Compute combined ET using the new formula:
-  // ET = |Δ(port1_wc)|×200 + |Δ(port2_wc)|×150 + |Δ(port3_wc)|×150.
+  // Combined ET = |Δ(port1_wc)|×200 + |Δ(port2_wc)|×150 + |Δ(port3_wc)|×150.
   const combinedCumET = calculateCombinedET(readings);
 
   console.log("Port 1 ET:", port1CumET);
@@ -153,7 +148,7 @@ export default function ZL6MakwanaPage() {
   console.log("Port 3 ET:", port3CumET);
   console.log("Combined ET:", combinedCumET);
 
-  // Original charts for Water Content, EC, and Temperature.
+  // Prepare original charts data.
   const wcChartData = {
     labels: readings.map((r) => r.timestamp),
     datasets: [
@@ -244,7 +239,7 @@ export default function ZL6MakwanaPage() {
     ],
   };
 
-  // Prepare a chart for cumulative ET values (all ET lines on one chart)
+  // Prepare ET chart data.
   const etChartData = {
     labels: readings.map((r) => r.timestamp),
     datasets: [
@@ -325,36 +320,42 @@ export default function ZL6MakwanaPage() {
       <div style={{ backgroundColor: "#fff", padding: "20px", color: "#000" }}>
         <h1>ZL6 Makwana</h1>
         <p>Measurement Interval: 5 minutes | Power Save Filter: 60 min</p>
-
-        {/* Single Date Picker */}
-        <div style={{ marginBottom: "1rem" }}>
-          <label>Select Date:</label>
-          <input
-            type="date"
-            value={date}
-            onChange={(e) => setDate(e.target.value)}
-            style={{ padding: "4px" }}
-          />
+        {/* Date Range Pickers */}
+        <div style={{ display: "flex", gap: "1rem", marginBottom: "1rem" }}>
+          <div>
+            <label style={{ marginRight: 8 }}>Start Date:</label>
+            <input
+              type="date"
+              value={startDate}
+              onChange={(e) => setStartDate(e.target.value)}
+              style={{ padding: "4px" }}
+            />
+          </div>
+          <div>
+            <label style={{ marginRight: 8 }}>End Date:</label>
+            <input
+              type="date"
+              value={endDate}
+              onChange={(e) => setEndDate(e.target.value)}
+              style={{ padding: "4px" }}
+            />
+          </div>
         </div>
-
         {/* Chart: Water Content */}
         <div style={{ height: 250, border: "1px solid #ccc", padding: 10, marginBottom: 10 }}>
           <h2 style={{ fontSize: "0.8rem" }}>Water Content (m³/m³)</h2>
           <Line data={wcChartData} options={commonOptions} />
         </div>
-
         {/* Chart: Saturation Extract EC */}
         <div style={{ height: 250, border: "1px solid #ccc", padding: 10, marginBottom: 10 }}>
           <h2 style={{ fontSize: "0.8rem" }}>Saturation Extract EC (dS/m)</h2>
           <Line data={ecChartData} options={commonOptions} />
         </div>
-
         {/* Chart: Soil Temperature */}
         <div style={{ height: 250, border: "1px solid #ccc", padding: 10, marginBottom: 10 }}>
           <h2 style={{ fontSize: "0.8rem" }}>Soil Temperature (°C)</h2>
           <Line data={tempChartData} options={commonOptions} />
         </div>
-
         {/* Chart: Evapotranspiration (ET) */}
         <div style={{ height: 250, border: "1px solid #ccc", padding: 10 }}>
           <h2 style={{ fontSize: "0.8rem" }}>Evapotranspiration (ET)</h2>
