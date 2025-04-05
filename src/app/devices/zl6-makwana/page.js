@@ -16,6 +16,7 @@ import {
   Legend,
 } from "chart.js";
 import MainScreen from "@/components/MainScreen";
+import { fetchLiveForecast, fetchHistoricalForecast } from "../../../../lib/weatherForecast"; // Import both functions
 
 // Register the necessary Chart.js components
 ChartJS.register(
@@ -29,23 +30,19 @@ ChartJS.register(
   Legend
 );
 
-// Standard SWR fetcher
+// Standard SWR fetcher for sensor data
 const fetcher = (url) => fetch(url).then((res) => res.json());
 
-// Helper function to calculate cumulative ET for a single port based on water content readings.
-// (Uses the change between consecutive readings multiplied by a multiplier.)
 function calculateCumulativeET(readings, field, multiplier) {
   let cumulative = 0;
   return readings.map((r, i) => {
-    if (i === 0) return 0; // Start at zero.
+    if (i === 0) return 0;
     const delta = (readings[i - 1][field] || 0) - (r[field] || 0);
     cumulative += delta * multiplier;
     return cumulative;
   });
 }
 
-// New helper function to calculate the combined ET using the new formula.
-// Combined ET = |Δ(port1_wc)|×200 + |Δ(port2_wc)|×150 + |Δ(port3_wc)|×150.
 function calculateCombinedET(readings) {
   let cumulative = 0;
   return readings.map((r, i) => {
@@ -59,102 +56,72 @@ function calculateCombinedET(readings) {
 }
 
 export default function ZL6MakwanaPage() {
-  // Initialize start and end date with today's date.
-  const [startDate, setStartDate] = useState(new Date().toISOString().split("T")[0]);
-  const [endDate, setEndDate] = useState(new Date().toISOString().split("T")[0]);
+  // Use today's date as default (format: YYYY-MM-DD)
+  const today = new Date().toISOString().split("T")[0];
+  const [startDate, setStartDate] = useState(today);
+  const [endDate, setEndDate] = useState(today);
 
-  // Build API URL with the start and end date query parameters including time.
+  // Coordinates for weather forecast (Berlin example)
+  const latitude = 56.9496;
+  const longitude = 24.1052;
+
+  // State for weather forecast data
+  const [weatherData, setWeatherData] = useState(null);
+
+  // Fetch weather forecast when component mounts or when date range changes.
+  useEffect(() => {
+    async function getWeather() {
+      const todayDate = new Date().toISOString().split("T")[0];
+      let data;
+      // Use historical forecast if startDate is before today; otherwise, use live forecast.
+      if (startDate < todayDate) {
+        data = await fetchHistoricalForecast(latitude, longitude, startDate, endDate);
+      } else {
+        data = await fetchLiveForecast(latitude, longitude);
+      }
+      setWeatherData(data);
+    }
+    getWeather();
+  }, [startDate, endDate, latitude, longitude]);
+
+  // Build API URL for sensor data.
   const apiUrl = `/api/zentra/fetch-makwana?start_date=${encodeURIComponent(
     `${startDate} 00:00`
   )}&end_date=${encodeURIComponent(`${endDate} 23:59`)}`;
-  console.log("🟢 API Request Sent From Client:", apiUrl);
+  console.log("🟢 Sensor API Request:", apiUrl);
 
   const { data, error } = useSWR(apiUrl, fetcher, {
     revalidateOnFocus: false,
-    dedupingInterval: 300000, // 5 minutes.
+    dedupingInterval: 300000,
     errorRetryCount: 0,
   });
 
   if (!startDate || !endDate) return <div>Loading date pickers...</div>;
   if (error)
-    return <div style={{ color: "red" }}>Error loading data: {error.message}</div>;
-  if (!data) return <div>Loading data...</div>;
+    return <div style={{ color: "red" }}>Error loading sensor data: {error.message}</div>;
+  if (!data) return <div>Loading sensor data...</div>;
+  console.log("API sensor response data:", data);
 
-  // Group sensor readings by timestamp.
-  const groupedData = {};
-
-  function processSensorData(sensorType, parameterField) {
-    if (!data.data[sensorType]) return;
-    data.data[sensorType].forEach((sensor) => {
-      const port = sensor.metadata?.port_number;
-      if (!port || !Array.isArray(sensor.readings)) return;
-      sensor.readings.forEach((reading) => {
-        const ts = reading.datetime;
-        if (!ts) return;
-        if (!groupedData[ts]) {
-          groupedData[ts] = {
-            timestamp: ts,
-            port1_wc: null,
-            port2_wc: null,
-            port3_wc: null,
-            port1_se_ec: null,
-            port2_se_ec: null,
-            port3_se_ec: null,
-            port1_temp: null,
-            port2_temp: null,
-            port3_temp: null,
-          };
-        }
-        if (parameterField === "wc") {
-          if (port === 1) groupedData[ts].port1_wc = reading.value;
-          else if (port === 2) groupedData[ts].port2_wc = reading.value;
-          else if (port === 3) groupedData[ts].port3_wc = reading.value;
-        } else if (parameterField === "se_ec") {
-          if (port === 1) groupedData[ts].port1_se_ec = reading.value;
-          else if (port === 2) groupedData[ts].port2_se_ec = reading.value;
-          else if (port === 3) groupedData[ts].port3_se_ec = reading.value;
-        } else if (parameterField === "temp") {
-          if (port === 1) groupedData[ts].port1_temp = reading.value;
-          else if (port === 2) groupedData[ts].port2_temp = reading.value;
-          else if (port === 3) groupedData[ts].port3_temp = reading.value;
-        }
-      });
-    });
-  }
-
-  // Process sensor data.
-  processSensorData("Water Content", "wc");
-  processSensorData("Saturation Extract EC", "se_ec");
-  processSensorData("Soil Temperature", "temp");
-
-  // Convert grouped data into an array.
-  const readings = Object.values(groupedData);
-  if (readings.length === 0)
-    return <div>No data found for the selected date range.</div>;
-
+  const readings = Array.isArray(data.data) ? data.data : [];
+  const noData = readings.length === 0;
   console.log("Fetched Readings:", readings);
 
-  // Compute individual cumulative ET values.
-  const port1CumET = calculateCumulativeET(readings, "port1_wc", 150);
-  const port2CumET = calculateCumulativeET(readings, "port2_wc", 300);
-  const port3CumET = calculateCumulativeET(readings, "port3_wc", 450);
-
-  // Compute combined ET using the new formula:
-  // Combined ET = |Δ(port1_wc)|×200 + |Δ(port2_wc)|×150 + |Δ(port3_wc)|×150.
-  const combinedCumET = calculateCombinedET(readings);
+  const port1CumET = noData ? [] : calculateCumulativeET(readings, "port1_wc", 150);
+  const port2CumET = noData ? [] : calculateCumulativeET(readings, "port2_wc", 300);
+  const port3CumET = noData ? [] : calculateCumulativeET(readings, "port3_wc", 450);
+  const combinedCumET = noData ? [] : calculateCombinedET(readings);
 
   console.log("Port 1 ET:", port1CumET);
   console.log("Port 2 ET:", port2CumET);
   console.log("Port 3 ET:", port3CumET);
   console.log("Combined ET:", combinedCumET);
 
-  // Prepare original charts data.
   const wcChartData = {
-    labels: readings.map((r) => r.timestamp),
+    labels: noData ? [] : readings.map((r) => r.timestamp),
     datasets: [
       {
         label: "Port 1 WC",
-        data: readings.map((r) => r.port1_wc),
+        data: noData ? [] : readings.map((r) => r.port1_wc),
         borderColor: "#2B7AEB",
         backgroundColor: "transparent",
         borderWidth: 2,
@@ -162,7 +129,7 @@ export default function ZL6MakwanaPage() {
       },
       {
         label: "Port 2 WC",
-        data: readings.map((r) => r.port2_wc),
+        data: noData ? [] : readings.map((r) => r.port2_wc),
         borderColor: "#2BC90E",
         backgroundColor: "transparent",
         borderWidth: 2,
@@ -170,7 +137,7 @@ export default function ZL6MakwanaPage() {
       },
       {
         label: "Port 3 WC",
-        data: readings.map((r) => r.port3_wc),
+        data: noData ? [] : readings.map((r) => r.port3_wc),
         borderColor: "#FF9900",
         backgroundColor: "transparent",
         borderWidth: 2,
@@ -180,11 +147,11 @@ export default function ZL6MakwanaPage() {
   };
 
   const ecChartData = {
-    labels: readings.map((r) => r.timestamp),
+    labels: noData ? [] : readings.map((r) => r.timestamp),
     datasets: [
       {
         label: "Port 1 EC",
-        data: readings.map((r) => r.port1_se_ec),
+        data: noData ? [] : readings.map((r) => r.port1_se_ec),
         borderColor: "#2B7AEB",
         backgroundColor: "transparent",
         borderWidth: 2,
@@ -192,7 +159,7 @@ export default function ZL6MakwanaPage() {
       },
       {
         label: "Port 2 EC",
-        data: readings.map((r) => r.port2_se_ec),
+        data: noData ? [] : readings.map((r) => r.port2_se_ec),
         borderColor: "#2BC90E",
         backgroundColor: "transparent",
         borderWidth: 2,
@@ -200,7 +167,7 @@ export default function ZL6MakwanaPage() {
       },
       {
         label: "Port 3 EC",
-        data: readings.map((r) => r.port3_se_ec),
+        data: noData ? [] : readings.map((r) => r.port3_se_ec),
         borderColor: "#FF9900",
         backgroundColor: "transparent",
         borderWidth: 2,
@@ -210,11 +177,11 @@ export default function ZL6MakwanaPage() {
   };
 
   const tempChartData = {
-    labels: readings.map((r) => r.timestamp),
+    labels: noData ? [] : readings.map((r) => r.timestamp),
     datasets: [
       {
         label: "Port 1 Temp",
-        data: readings.map((r) => r.port1_temp),
+        data: noData ? [] : readings.map((r) => r.port1_temp),
         borderColor: "#1BCFC9",
         backgroundColor: "transparent",
         borderWidth: 2,
@@ -222,7 +189,7 @@ export default function ZL6MakwanaPage() {
       },
       {
         label: "Port 2 Temp",
-        data: readings.map((r) => r.port2_temp),
+        data: noData ? [] : readings.map((r) => r.port2_temp),
         borderColor: "#9DD800",
         backgroundColor: "transparent",
         borderWidth: 2,
@@ -230,7 +197,7 @@ export default function ZL6MakwanaPage() {
       },
       {
         label: "Port 3 Temp",
-        data: readings.map((r) => r.port3_temp),
+        data: noData ? [] : readings.map((r) => r.port3_temp),
         borderColor: "#FFD700",
         backgroundColor: "transparent",
         borderWidth: 2,
@@ -239,13 +206,12 @@ export default function ZL6MakwanaPage() {
     ],
   };
 
-  // Prepare ET chart data.
   const etChartData = {
-    labels: readings.map((r) => r.timestamp),
+    labels: noData ? [] : readings.map((r) => r.timestamp),
     datasets: [
       {
         label: "Port 1 ET (15 cm)",
-        data: port1CumET,
+        data: noData ? [] : port1CumET,
         borderColor: "#2B7AEB",
         backgroundColor: "transparent",
         borderWidth: 2,
@@ -253,7 +219,7 @@ export default function ZL6MakwanaPage() {
       },
       {
         label: "Port 2 ET (30 cm)",
-        data: port2CumET,
+        data: noData ? [] : port2CumET,
         borderColor: "#2BC90E",
         backgroundColor: "transparent",
         borderWidth: 2,
@@ -261,7 +227,7 @@ export default function ZL6MakwanaPage() {
       },
       {
         label: "Port 3 ET (45 cm)",
-        data: port3CumET,
+        data: noData ? [] : port3CumET,
         borderColor: "#FF9900",
         backgroundColor: "transparent",
         borderWidth: 2,
@@ -269,7 +235,7 @@ export default function ZL6MakwanaPage() {
       },
       {
         label: "Combined ET",
-        data: combinedCumET,
+        data: noData ? [] : combinedCumET,
         borderColor: "#800080",
         backgroundColor: "transparent",
         borderWidth: 2,
@@ -278,7 +244,6 @@ export default function ZL6MakwanaPage() {
     ],
   };
 
-  // Chart options with a time-based x-axis and detailed y-axis (3 decimal places)
   const commonOptions = {
     responsive: true,
     maintainAspectRatio: false,
@@ -315,6 +280,150 @@ export default function ZL6MakwanaPage() {
     },
   };
 
+  // Process weather data for the selected date safely
+  let filteredWeather = [];
+  if (weatherData && weatherData.hourly && weatherData.hourly.time) {
+    const times = weatherData.hourly.time || [];
+    const temperatures = weatherData.hourly.temperature_2m || [];
+    const relativeHumidity = weatherData.hourly.relativehumidity_2m || [];
+    const windSpeed = weatherData.hourly.wind_speed_10m || [];
+    const solarRadiation = weatherData.hourly.solar_radiation || [];
+    const rainArr = weatherData.hourly.rain || [];
+    
+    const selectedDate = startDate; // expecting "YYYY-MM-DD"
+    filteredWeather = times
+      .map((time, idx) => {
+        if (time.startsWith(selectedDate)) {
+          return {
+            time,
+            temperature: temperatures[idx] ?? 0,
+            relativehumidity: relativeHumidity[idx] ?? 0,
+            wind_speed: windSpeed[idx] ?? 0,
+            solar_radiation: solarRadiation[idx] ?? 0,
+            rain: rainArr[idx] ?? 0,
+          };
+        }
+        return null;
+      })
+      .filter((item) => item !== null);
+  }
+  
+  const weatherTimes = filteredWeather.map((item) => item.time);
+  
+  const weatherChartData = {
+    labels: weatherTimes,
+    datasets: [
+      {
+        label: "Temp (°C)",
+        data: filteredWeather.map((item) => item.temperature),
+        borderColor: "#FF0000",
+        backgroundColor: "transparent",
+        yAxisID: "tempAxis",
+        tension: 0.2,
+      },
+      {
+        label: "Humidity (%)",
+        data: filteredWeather.map((item) => item.relativehumidity),
+        borderColor: "#00CC00",
+        backgroundColor: "transparent",
+        yAxisID: "humidityAxis",
+        tension: 0.2,
+      },
+      {
+        label: "Wind Speed (m/s)",
+        data: filteredWeather.map((item) => item.wind_speed),
+        borderColor: "#0000FF",
+        backgroundColor: "transparent",
+        yAxisID: "windAxis",
+        tension: 0.2,
+      },
+      {
+        label: "Solar Rad.",
+        data: filteredWeather.map((item) => item.solar_radiation),
+        borderColor: "#FFA500",
+        backgroundColor: "transparent",
+        yAxisID: "solarAxis",
+        tension: 0.2,
+      },
+      {
+        label: "Rain (mm)",
+        data: filteredWeather.map((item) => item.rain),
+        borderColor: "#00AAFF",
+        backgroundColor: "rgba(0,170,255,0.3)",
+        yAxisID: "rainAxis",
+        fill: true,
+        tension: 0.2,
+      },
+    ],
+  };
+  
+  const weatherChartOptions = {
+    responsive: true,
+    maintainAspectRatio: false,
+    scales: {
+      x: {
+        type: "time",
+        time: {
+          displayFormats: {
+            minute: "MMM dd HH:mm",
+            hour: "MMM dd HH:mm",
+            day: "MMM dd",
+          },
+        },
+        ticks: { color: "#000", autoSkip: true, maxRotation: 45 },
+      },
+      tempAxis: {
+        type: "linear",
+        position: "left",
+        title: { display: true, text: "Temp (°C)" },
+        grid: { drawOnChartArea: false },
+        ticks: { color: "#000" },
+      },
+      humidityAxis: {
+        type: "linear",
+        position: "right",
+        offset: true,
+        title: { display: true, text: "Humidity (%)" },
+        grid: { drawOnChartArea: false },
+        ticks: { color: "#000" },
+      },
+      windAxis: {
+        type: "linear",
+        position: "right",
+        offset: true,
+        title: { display: true, text: "Wind Speed (m/s)" },
+        grid: { drawOnChartArea: false },
+        ticks: { color: "#000" },
+      },
+      solarAxis: {
+        type: "linear",
+        position: "right",
+        offset: true,
+        title: { display: true, text: "Solar Radiation" },
+        grid: { drawOnChartArea: false },
+        ticks: { color: "#000" },
+      },
+      rainAxis: {
+        type: "linear",
+        position: "right",
+        offset: true,
+        title: { display: true, text: "Rain (mm)" },
+        grid: { drawOnChartArea: false },
+        ticks: { color: "#000" },
+      },
+    },
+    plugins: {
+      legend: { position: "top", labels: { color: "#000", font: { size: 12 } } },
+      tooltip: {
+        backgroundColor: "#fff",
+        titleColor: "#000",
+        bodyColor: "#000",
+        borderColor: "#ccc",
+        borderWidth: 1,
+      },
+    },
+  };
+
   return (
     <MainScreen>
       <div style={{ backgroundColor: "#fff", padding: "20px", color: "#000" }}>
@@ -341,22 +450,42 @@ export default function ZL6MakwanaPage() {
             />
           </div>
         </div>
-        {/* Chart: Water Content */}
+
+        {/* Weather Forecast Section */}
+        <div style={{ marginBottom: "1rem" }}>
+          <h2 style={{ fontSize: "1rem", marginBottom: "0.5rem" }}>
+            Weather Forecast for {startDate}
+          </h2>
+          {(!weatherData || !weatherData.hourly) && <p>Loading weather forecast...</p>}
+          {weatherData && weatherData.hourly && filteredWeather.length > 0 && (
+            <div style={{ height: 400 }}>
+              <Line data={weatherChartData} options={weatherChartOptions} />
+            </div>
+          )}
+          {weatherData && weatherData.hourly && filteredWeather.length === 0 && (
+            <p>No weather data available for this date.</p>
+          )}
+        </div>
+
+        {noData && (
+          <p style={{ color: "orange" }}>
+            No sensor data found for the selected date range.
+          </p>
+        )}
+
+        {/* Sensor Data Charts */}
         <div style={{ height: 250, border: "1px solid #ccc", padding: 10, marginBottom: 10 }}>
           <h2 style={{ fontSize: "0.8rem" }}>Water Content (m³/m³)</h2>
           <Line data={wcChartData} options={commonOptions} />
         </div>
-        {/* Chart: Saturation Extract EC */}
         <div style={{ height: 250, border: "1px solid #ccc", padding: 10, marginBottom: 10 }}>
           <h2 style={{ fontSize: "0.8rem" }}>Saturation Extract EC (dS/m)</h2>
           <Line data={ecChartData} options={commonOptions} />
         </div>
-        {/* Chart: Soil Temperature */}
         <div style={{ height: 250, border: "1px solid #ccc", padding: 10, marginBottom: 10 }}>
           <h2 style={{ fontSize: "0.8rem" }}>Soil Temperature (°C)</h2>
           <Line data={tempChartData} options={commonOptions} />
         </div>
-        {/* Chart: Evapotranspiration (ET) */}
         <div style={{ height: 250, border: "1px solid #ccc", padding: 10 }}>
           <h2 style={{ fontSize: "0.8rem" }}>Evapotranspiration (ET)</h2>
           <Line data={etChartData} options={commonOptions} />

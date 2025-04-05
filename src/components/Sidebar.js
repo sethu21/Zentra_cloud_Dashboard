@@ -4,7 +4,7 @@ import { Home, Thermometer, Droplet, FileText, Settings, User } from "lucide-rea
 export default function Sidebar() {
   return (
     <nav className="sidebar">
-      <div className="text-xl font-semibold">RTU Sensor Dashboard</div>
+      <div className="text-xl font-semibold"> Sensor Dashboard</div>
       <div className="mt-6">
         {/* Home */}
         <Link href="/" className="flex items-center gap-3 p-3 hover:bg-gray-700 transition">

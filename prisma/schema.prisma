@@ -1,0 +1,22 @@
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+model EtReading {
+  id          Int      @id @default(autoincrement())
+  timestamp   DateTime @unique
+  port1_wc    Float?
+  port2_wc    Float?
+  port3_wc    Float?
+  port1_se_ec Float?
+  port2_se_ec Float?
+  port3_se_ec Float?
+  port1_temp  Float?
+  port2_temp  Float?
+  port3_temp  Float?
+}

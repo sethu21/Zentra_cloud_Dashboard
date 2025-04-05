@@ -3,7 +3,7 @@ import { Bell, UserCircle } from "lucide-react";
 export default function Navbar() {
   return (
     <header className="top-navbar flex items-center justify-between px-6">
-      <h1 className="text-lg font-semibold">ZL6 Dashboard</h1>
+      <h1 className="text-lg font-semibold">ECOIGM Dashboard</h1>
       <div className="flex items-center gap-6">
         <button className="relative flex items-center justify-center p-2 rounded-full hover:bg-gray-700 transition">
           <Bell size={24} />
