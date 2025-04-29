@@ -3,14 +3,12 @@
 import { useState, useEffect } from "react";
 import LoadingScreen from "@/components/LoadingScreen";
 import { useSensorData } from "@/lib/hooks/useSensorData";
-
 import {
   cleanTimestamps,
   compressByInterval,
   estimateETByPort,
   estimateTotalET,
 } from "@/lib/utils/processReadings";
-
 import ETChart from "@/components/charts/ETChart";
 import WCChart from "@/components/charts/WCChart";
 import ECChart from "@/components/charts/ECChart";
@@ -19,29 +17,24 @@ import WeatherChart from "@/components/charts/WeatherChart";
 import Card from "@/components/ui/Card";
 import { fetchLiveForecast, fetchHistoricalForecast } from "@/lib/weatherForecast";
 
-export default function SensorDashboardPage() {
+export default function Mesocosm1Page() {
   const today = new Date().toISOString().split("T")[0];
   const [startDate, setStartDate] = useState(today);
   const [endDate, setEndDate] = useState(today);
   const [interval, setInterval] = useState("5min");
   const [weatherData, setWeatherData] = useState(null);
 
-  // Latitude and Longitude (for the weather API)
-  const latitude = 56.9496; // Example latitude
-  const longitude = 24.1052; // Example longitude
+  const latitude = 56.9496;
+  const longitude = 24.1052;
 
-  // fetch sensor data
-  const { data: rawData, isLoading, isError } =
-    useSensorData(startDate, endDate);
+  const { data: rawData, isLoading, isError } = useSensorData(startDate, endDate);
   const readings = cleanTimestamps(rawData || []);
   const noData = readings.length === 0;
 
-  // Fetch weather forecast when component mounts or when date range changes.
   useEffect(() => {
     async function getWeather() {
       const todayDate = new Date().toISOString().split("T")[0];
       let data;
-      // Use historical forecast if startDate is before today; otherwise, use live forecast.
       if (startDate < todayDate) {
         data = await fetchHistoricalForecast(latitude, longitude, startDate, endDate);
       } else {
@@ -52,98 +45,59 @@ export default function SensorDashboardPage() {
     getWeather();
   }, [startDate, endDate, latitude, longitude]);
 
-  // aggregate & ET estimates
   const aggregated = noData
     ? []
     : compressByInterval(readings, interval, startDate, endDate);
 
-  const port1ET = estimateETByPort(
-    aggregated,
-    "p1_wc",
-    50,
-    weatherData,
-    interval
-  );
-  const port2ET = estimateETByPort(
-    aggregated,
-    "p2_wc",
-    50,
-    weatherData,
-    interval
-  );
-  const port3ET = estimateETByPort(
-    aggregated,
-    "p3_wc",
-    50,
-    weatherData,
-    interval
-  );
-  const port4ET = estimateETByPort(
-    aggregated,
-    "p4_wc",
-    50,
-    weatherData,
-    interval
-  );
-  const port5ET = estimateETByPort(
-    aggregated,
-    "p5_wc",
-    50,
-    weatherData,
-    interval
-  );
-  const port6ET = estimateETByPort(
-    aggregated,
-    "p6_wc",
-    50,
-    weatherData,
-    interval
-  );
-  const combinedET = estimateTotalET(aggregated, weatherData, interval);
+  // Calculate ET for each port
+  const port1ET = estimateETByPort(aggregated, "p1_wc", 200);  // 15 cm depth
+  const port2ET = estimateETByPort(aggregated, "p2_wc", 150);  // 30 cm depth
+  const port3ET = estimateETByPort(aggregated, "p3_wc", 150);  // 45 cm depth
+  const combinedET = estimateTotalET(aggregated, 'Mesocosm1');
 
-  // ─── chart data ────────────────────────────────────
+  // Chart Data Preparation
   const etChartData = {
     labels: aggregated.map((r) => r.timestamp),
     datasets: [
-      { label: "ET (Port 1)", data: port1ET, borderColor: "#2B7AEB", pointRadius: 0 },
-      { label: "ET (Port 2)", data: port2ET, borderColor: "#2BC90E", pointRadius: 0 },
-      { label: "ET (Port 3)", data: port3ET, borderColor: "#FF9900", pointRadius: 0 },
-      { label: "ET (Port 4)", data: port4ET, borderColor: "#FF00FF", pointRadius: 0 },
-      { label: "ET (Port 5)", data: port5ET, borderColor: "#00FFFF", pointRadius: 0 },
-      { label: "ET (Port 6)", data: port6ET, borderColor: "#FFFF00", pointRadius: 0 },
-      { label: "Combined ET", data: combinedET, borderColor: "#800080", pointRadius: 0 },
+      { label: "ET (Port 1)", data: port1ET, borderColor: "#2B7AEB", pointRadius: 0 },
+      { label: "ET (Port 2)", data: port2ET, borderColor: "#2BC90E", pointRadius: 0 },
+      { label: "ET (Port 3)", data: port3ET, borderColor: "#FF9900", pointRadius: 0 },
+      {
+        label: "Combined ET",
+        data: combinedET,
+        borderColor: "#008000",
+        borderWidth: 2,     // make the line visible
+        pointRadius: 4,     // show the point even if only one bucket
+        spanGaps: true,     // connect across any nulls
+        fill: false,
+      },
     ],
   };
 
   const wcChartData = {
     labels: readings.map((r) => r.timestamp),
     datasets: [
-      { label: "Port 1 WC", data: readings.map((r) => r.port1_wc), borderColor: "#2B7AEB", pointRadius: 0 },
-      { label: "Port 2 WC", data: readings.map((r) => r.port2_wc), borderColor: "#2BC90E", pointRadius: 0 },
-      { label: "Port 3 WC", data: readings.map((r) => r.port3_wc), borderColor: "#FF9900", pointRadius: 0 },
-      { label: "Port 4 WC", data: readings.map((r) => r.port4_wc), borderColor: "#FF00FF", pointRadius: 0 },
-      { label: "Port 5 WC", data: readings.map((r) => r.port5_wc), borderColor: "#00FFFF", pointRadius: 0 },
-      { label: "Port 6 WC", data: readings.map((r) => r.port6_wc), borderColor: "#FFFF00", pointRadius: 0 },
+      { label: "Port 1 WC", data: readings.map((r) => r.port1_wc), borderColor: "#2B7AEB", pointRadius: 0 },
+      { label: "Port 2 WC", data: readings.map((r) => r.port2_wc), borderColor: "#2BC90E", pointRadius: 0 },
+      { label: "Port 3 WC", data: readings.map((r) => r.port3_wc), borderColor: "#FF9900", pointRadius: 0 },
     ],
   };
 
   const ecChartData = {
     labels: readings.map((r) => r.timestamp),
     datasets: [
-      { label: "Port 1 EC", data: readings.map((r) => r.port1_se_ec), borderColor: "#00ccff", pointRadius: 0 },
-      { label: "Port 2 EC", data: readings.map((r) => r.port2_se_ec), borderColor: "#66ff66", pointRadius: 0 },
-      { label: "Port 3 EC", data: readings.map((r) => r.port3_se_ec), borderColor: "#ffa500", pointRadius: 0 },
-      { label: "Port 4 EC", data: readings.map((r) => r.port4_se_ec), borderColor: "#FF00FF", pointRadius: 0 },
+      { label: "Port 1 EC", data: readings.map((r) => r.port1_se_ec), borderColor: "#00ccff", pointRadius: 0 },
+      { label: "Port 2 EC", data: readings.map((r) => r.port2_se_ec), borderColor: "#66ff66", pointRadius: 0 },
+      { label: "Port 3 EC", data: readings.map((r) => r.port3_se_ec), borderColor: "#ffa500", pointRadius: 0 },
     ],
   };
 
   const tempChartData = {
     labels: readings.map((r) => r.timestamp),
     datasets: [
-      { label: "Port 1 Temp", data: readings.map((r) => r.port1_temp), borderColor: "#1BCFC9", pointRadius: 0 },
-      { label: "Port 2 Temp", data: readings.map((r) => r.port2_temp), borderColor: "#9DD800", pointRadius: 0 },
-      { label: "Port 3 Temp", data: readings.map((r) => r.port3_temp), borderColor: "#FFD700", pointRadius: 0 },
-      { label: "Port 4 Temp", data: readings.map((r) => r.port4_temp), borderColor: "#FF00FF", pointRadius: 0 },
+      { label: "Port 1 Temp", data: readings.map((r) => r.port1_temp), borderColor: "#1BCFC9", pointRadius: 0 },
+      { label: "Port 2 Temp", data: readings.map((r) => r.port2_temp), borderColor: "#9DD800", pointRadius: 0 },
+      { label: "Port 3 Temp", data: readings.map((r) => r.port3_temp), borderColor: "#FFD700", pointRadius: 0 },
     ],
   };
 
@@ -165,7 +119,6 @@ export default function SensorDashboardPage() {
     ],
   };
 
-  // ─── Render ─────────────────────────────────────────
   return (
     <main
       style={{
@@ -175,10 +128,9 @@ export default function SensorDashboardPage() {
       }}
     >
       <h2 style={{ fontSize: "1.5rem", color: "#fff", marginBottom: "1rem" }}>
-        Sensor Dashboard
+        Mesocosm 1 Dashboard
       </h2>
 
-      {/* always-visible date & interval */}
       <div
         style={{
           display: "flex",
@@ -210,16 +162,15 @@ export default function SensorDashboardPage() {
             value={interval}
             onChange={(e) => setInterval(e.target.value)}
           >
-            <option value="5min">5 min</option>
-            <option value="1hour">1 hour</option>
-            <option value="8hours">8 hours</option>
-            <option value="12hours">12 hours</option>
-            <option value="24hours">24 hours</option>
+            <option value="5min">5 min</option>
+            <option value="1hour">1 hour</option>
+            <option value="8hours">8 hours</option>
+            <option value="12hours">12 hours</option>
+            <option value="24hours">24 hours</option>
           </select>
         </div>
       </div>
 
-      {/* loading / error / no data / charts */}
       {isLoading ? (
         <Card style={{ padding: "2rem", textAlign: "center" }}>
           <LoadingScreen />

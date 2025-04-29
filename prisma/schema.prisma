@@ -1,15 +1,15 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
 datasource db {
   provider = "postgresql"
   url      = env("DATABASE_URL")
 }
 
-generator client {
-  provider = "prisma-client-js"
-}
-
 model EtReading {
   id          Int      @id @default(autoincrement())
-  timestamp   DateTime @unique
+  timestamp   DateTime
   port1_wc    Float?
   port2_wc    Float?
   port3_wc    Float?
@@ -19,4 +19,9 @@ model EtReading {
   port1_temp  Float?
   port2_temp  Float?
   port3_temp  Float?
+  port4_wc    Float?
+  port5_wc    Float?
+  port6_wc    Float?
+  port4_se_ec Float?
+  port4_temp  Float?
 }

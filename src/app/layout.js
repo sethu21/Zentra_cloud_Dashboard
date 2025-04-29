@@ -9,23 +9,27 @@ export default function RootLayout({ children }) {
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
-    // Simple loading screen for 1.5s
     setTimeout(() => setIsLoading(false), 1500);
   }, []);
 
   return (
     <html lang="en">
-      <body className="main-container">
+      <body>
         {isLoading ? (
-          <div className="flex items-center justify-center min-h-screen w-full text-3xl font-bold">
-            Loading... Please wait
+          <div className="loading-container">
+            <div style={{ display: "flex", flexDirection: "column", alignItems: "center" }}>
+              <img src="/ECOIGM_Logo_RGB.png" alt="ECOIGM Logo" />
+              <div>Loading... Please wait</div>
+            </div>
           </div>
         ) : (
-          <>
+          <div className="main-container">
             <Navbar />
             <Sidebar />
-            <div className="content-wrapper">{children}</div>
-          </>
+            <div className="content-wrapper">
+              {children} {/* Render HomePage content here */}
+            </div>
+          </div>
         )}
       </body>
     </html>
