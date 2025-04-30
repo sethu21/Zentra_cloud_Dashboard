@@ -7,7 +7,7 @@ import {
   cleanTimestamps,
   compressByInterval,
   estimateETByPort,
-  estimateTotalET,
+  estimateTotalETByInterval,
 } from "@/lib/utils/processReadings";
 import ETChart from "@/components/charts/ETChart";
 import WCChart from "@/components/charts/WCChart";
@@ -20,16 +20,16 @@ import { fetchLiveForecast, fetchHistoricalForecast } from "@/lib/weatherForecas
 export default function Mesocosm1Page() {
   const today = new Date().toISOString().split("T")[0];
   const [startDate, setStartDate] = useState(today);
-  const [endDate, setEndDate] = useState(today);
-  const [interval, setInterval] = useState("5min");
+  const [endDate,   setEndDate]   = useState(today);
+  const [interval,  setInterval]  = useState("5min");
   const [weatherData, setWeatherData] = useState(null);
 
-  const latitude = 56.9496;
+  const latitude  = 56.9496;
   const longitude = 24.1052;
 
   const { data: rawData, isLoading, isError } = useSensorData(startDate, endDate);
   const readings = cleanTimestamps(rawData || []);
-  const noData = readings.length === 0;
+  const noData   = readings.length === 0;
 
   useEffect(() => {
     async function getWeather() {
@@ -45,19 +45,38 @@ export default function Mesocosm1Page() {
     getWeather();
   }, [startDate, endDate, latitude, longitude]);
 
-  const aggregated = noData
+  // bucket into interval and get last readings per bucket for per-port ET
+// 1) Bucket raw readings into intervals
+const buckets = noData
     ? []
     : compressByInterval(readings, interval, startDate, endDate);
 
-  // Calculate ET for each port
-  const port1ET = estimateETByPort(aggregated, "p1_wc", 200);  // 15 cm depth
-  const port2ET = estimateETByPort(aggregated, "p2_wc", 150);  // 30 cm depth
-  const port3ET = estimateETByPort(aggregated, "p3_wc", 150);  // 45 cm depth
-  const combinedET = estimateTotalET(aggregated, 'Mesocosm1');
+  const aggregated = buckets.map(({ timestamp, readings }) => {
+    const last = readings[readings.length - 1];
+    return {
+      timestamp,
+      p1_wc: last.port1_wc,
+      p2_wc: last.port2_wc,
+      p3_wc: last.port3_wc,
+    };
+  });
 
-  // Chart Data Preparation
+
+  // per-port ET from those end-of-bucket values
+  const port1ET = estimateETByPort(aggregated, "p1_wc", 200);  // 15 cm
+  const port2ET = estimateETByPort(aggregated, "p2_wc", 150);  // 30 cm
+  const port3ET = estimateETByPort(aggregated, "p3_wc", 150);  // 45 cm
+
+  // combined ET by summing all intra-bucket drops in the full reading series
+  // 3) Combined ET by summing all drops inside each bucket
+  const combinedET = aggregated.map((_, i) =>
+    (port1ET[i] || 0) + (port2ET[i] || 0) + (port3ET[i] || 0)
+  );
+
+
+  // Chart data
   const etChartData = {
-    labels: aggregated.map((r) => r.timestamp),
+    labels: aggregated.map(r => r.timestamp),
     datasets: [
       { label: "ET (Port 1)", data: port1ET, borderColor: "#2B7AEB", pointRadius: 0 },
       { label: "ET (Port 2)", data: port2ET, borderColor: "#2BC90E", pointRadius: 0 },
@@ -66,9 +85,9 @@ export default function Mesocosm1Page() {
         label: "Combined ET",
         data: combinedET,
         borderColor: "#008000",
-        borderWidth: 2,     // make the line visible
-        pointRadius: 4,     // show the point even if only one bucket
-        spanGaps: true,     // connect across any nulls
+        borderWidth: 2,
+        pointRadius: 4,
+        spanGaps: true,
         fill: false,
       },
     ],

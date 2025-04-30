@@ -52,68 +52,6 @@ export default function SensorDashboardPage() {
     getWeather();
   }, [startDate, endDate, latitude, longitude]);
 
-  // aggregate & ET estimates
-  const aggregated = noData
-    ? []
-    : compressByInterval(readings, interval, startDate, endDate);
-
-  const port1ET = estimateETByPort(
-    aggregated,
-    "p1_wc",
-    50,
-    weatherData,
-    interval
-  );
-  const port2ET = estimateETByPort(
-    aggregated,
-    "p2_wc",
-    50,
-    weatherData,
-    interval
-  );
-  const port3ET = estimateETByPort(
-    aggregated,
-    "p3_wc",
-    50,
-    weatherData,
-    interval
-  );
-  const port4ET = estimateETByPort(
-    aggregated,
-    "p4_wc",
-    50,
-    weatherData,
-    interval
-  );
-  const port5ET = estimateETByPort(
-    aggregated,
-    "p5_wc",
-    50,
-    weatherData,
-    interval
-  );
-  const port6ET = estimateETByPort(
-    aggregated,
-    "p6_wc",
-    50,
-    weatherData,
-    interval
-  );
-  const combinedET = estimateTotalET(aggregated, weatherData, interval);
-
-  // ─── chart data ────────────────────────────────────
-  const etChartData = {
-    labels: aggregated.map((r) => r.timestamp),
-    datasets: [
-      { label: "ET (Port 1)", data: port1ET, borderColor: "#2B7AEB", pointRadius: 0 },
-      { label: "ET (Port 2)", data: port2ET, borderColor: "#2BC90E", pointRadius: 0 },
-      { label: "ET (Port 3)", data: port3ET, borderColor: "#FF9900", pointRadius: 0 },
-      { label: "ET (Port 4)", data: port4ET, borderColor: "#FF00FF", pointRadius: 0 },
-      { label: "ET (Port 5)", data: port5ET, borderColor: "#00FFFF", pointRadius: 0 },
-      { label: "ET (Port 6)", data: port6ET, borderColor: "#FFFF00", pointRadius: 0 },
-      { label: "Combined ET", data: combinedET, borderColor: "#800080", pointRadius: 0 },
-    ],
-  };
 
   const wcChartData = {
     labels: readings.map((r) => r.timestamp),
@@ -204,19 +142,6 @@ export default function SensorDashboardPage() {
             onChange={(e) => setEndDate(e.target.value)}
           />
         </div>
-        <div>
-          <label style={{ color: "#ccc" }}>ET Interval</label>
-          <select
-            value={interval}
-            onChange={(e) => setInterval(e.target.value)}
-          >
-            <option value="5min">5 min</option>
-            <option value="1hour">1 hour</option>
-            <option value="8hours">8 hours</option>
-            <option value="12hours">12 hours</option>
-            <option value="24hours">24 hours</option>
-          </select>
-        </div>
       </div>
 
       {/* loading / error / no data / charts */}
@@ -236,18 +161,6 @@ export default function SensorDashboardPage() {
         </Card>
       ) : (
         <>
-          <Card style={{ marginBottom: "2rem", height: "350px" }}>
-            <h3 style={{ color: "#fff", marginBottom: "0.5rem" }}>ET Chart</h3>
-            <div
-              style={{
-                position: "relative",
-                width: "100%",
-                height: "calc(100% - 1.5rem)",
-              }}
-            >
-              <ETChart data={etChartData} />
-            </div>
-          </Card>
 
           <Card style={{ marginBottom: "2rem", height: "350px" }}>
             <h3 style={{ color: "#fff", marginBottom: "0.5rem" }}>
