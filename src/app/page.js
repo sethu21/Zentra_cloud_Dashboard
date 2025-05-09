@@ -1,3 +1,4 @@
+// File: src/app/page.js
 "use client";
 
 import useSWR from "swr";
@@ -8,7 +9,8 @@ import { getIrrigationDecision } from "@/lib/irrigationDecision";
 import { useEffect, useState } from "react";
 import { estimateTotalET } from "@/lib/utils/processReadings";
 import { fetchLiveForecast } from "@/lib/weatherForecast";
-import { FaTint, FaFaucet } from "react-icons/fa"; // npm i react-icons
+import { FaTint, FaFaucet, FaCommentDots } from "react-icons/fa";
+import ChatBubble from "@/components/ChatBubble";
 
 const MapLibreGISMap = dynamic(() => import("@/components/MapLibreGISMap"), {
   ssr: false,
@@ -28,7 +30,6 @@ export default function HomePage() {
     revalidateOnFocus: false,
   });
 
-  // User settings for irrigation logic
   const [userSettings, setUserSettings] = useState({ soilType: "Sandy Loam", rootDepth: 300, mad: 0.5 });
   useEffect(() => {
     if (typeof window !== "undefined") {
@@ -37,26 +38,22 @@ export default function HomePage() {
     }
   }, []);
 
-  // Weather data state
   const [weatherData, setWeatherData] = useState(null);
   useEffect(() => {
     async function getWeather() {
       const lat = 56.9301676, lon = 24.1613327;
-      const data = await fetchLiveForecast(lat, lon);
-      setWeatherData(data);
+      const w = await fetchLiveForecast(lat, lon);
+      setWeatherData(w);
     }
     getWeather();
   }, []);
 
-  // State for modal popup
+  // popup states
   const [showPopup, setShowPopup] = useState(false);
+  const [showChat, setShowChat] = useState(false);
 
   if (error)
-    return (
-      <div style={{ color: "red", textAlign: "center" }}>
-        Error loading sensor data: {error.message}
-      </div>
-    );
+    return <div style={{ color: "red", textAlign: "center" }}>Error loading sensor data: {error.message}</div>;
   if (!data)
     return <LoadingScreen message="Loading sensor data, please wait..." />;
 
@@ -66,7 +63,6 @@ export default function HomePage() {
 
   const last = readings[readings.length - 1];
 
-  // Calculate ET and rain for decision support
   let combinedET = [];
   if (readings && weatherData) {
     combinedET = estimateTotalET(readings, weatherData, "5min");
@@ -74,7 +70,6 @@ export default function HomePage() {
   const rainSeries =
     weatherData?.hourly?.rain?.slice(0, combinedET.length) || Array(combinedET.length).fill(0);
 
-  // Get irrigation decision
   const irrigationDecision = getIrrigationDecision({
     soilType: userSettings.soilType,
     rootDepth: userSettings.rootDepth,
@@ -83,7 +78,6 @@ export default function HomePage() {
     rainData: rainSeries,
   });
 
-  // Device location for the map
   const devices = [
     {
       name: "ZL6 Maskavas",
@@ -98,7 +92,6 @@ export default function HomePage() {
     },
   ];
 
-  // ---- Render ----
   return (
     <div
       style={{
@@ -106,10 +99,10 @@ export default function HomePage() {
         background: "linear-gradient(135deg, #1e1e2d, #3a3f58)",
         padding: "2rem",
         color: "#fff",
-        position: "relative"
+        position: "relative",
       }}
     >
-      {/* Floating Water Drop Icon for Irrigation Decision */}
+      {/* Irrigation Decision Button */}
       <button
         aria-label="Show Irrigation Decision"
         onClick={() => setShowPopup(true)}
@@ -134,12 +127,16 @@ export default function HomePage() {
       >
         {irrigationDecision.decision === "Irrigation recommended" ? <FaFaucet /> : <FaTint />}
       </button>
-      {/* Modal popup for the irrigation decision */}
+
+      {/* Irrigation Popup */}
       {showPopup && (
         <div
           style={{
             position: "fixed",
-            top: 0, left: 0, width: "100vw", height: "100vh",
+            top: 0,
+            left: 0,
+            width: "100vw",
+            height: "100vh",
             background: "rgba(34,34,51,0.95)",
             zIndex: 1000,
             display: "flex",
@@ -158,19 +155,22 @@ export default function HomePage() {
               textAlign: "center",
               color: "#fff",
               minWidth: 320,
-              position: "relative"
+              position: "relative",
             }}
-            onClick={e => e.stopPropagation()}
+            onClick={(e) => e.stopPropagation()}
           >
             <div style={{ fontSize: 56, marginBottom: 12 }}>
-              {irrigationDecision.decision === "Irrigation recommended" ? <FaFaucet color="#4fc3f7" /> : <FaTint color="#4caf50" />}
+              {irrigationDecision.decision === "Irrigation recommended" ? (
+                <FaFaucet color="#4fc3f7" />
+              ) : (
+                <FaTint color="#4caf50" />
+              )}
             </div>
             <h2 style={{ margin: "0 0 8px 0" }}>Irrigation Decision</h2>
-            <div style={{ fontSize: 18, marginBottom: 12 }}>
-              {irrigationDecision.decision}
-            </div>
+            <div style={{ fontSize: 18, marginBottom: 12 }}>{irrigationDecision.decision}</div>
             <div style={{ fontSize: 15 }}>
-              Depletion: <b>{irrigationDecision.currentDepletion} mm</b><br />
+              Depletion: <b>{irrigationDecision.currentDepletion} mm</b>
+              <br />
               Threshold: <b>{irrigationDecision.threshold} mm</b>
             </div>
             <button
@@ -182,7 +182,7 @@ export default function HomePage() {
                 borderRadius: "8px",
                 padding: "0.7rem 1.8rem",
                 fontSize: 16,
-                cursor: "pointer"
+                cursor: "pointer",
               }}
               onClick={() => setShowPopup(false)}
             >
@@ -203,65 +203,74 @@ export default function HomePage() {
           quality={100}
         />
         <p style={{ marginTop: 8 }}>
-          Last Updated:{" "}
-          {last?.timestamp
-            ? new Date(last.timestamp).toLocaleString()
-            : ""}
+          Last Updated: {last.timestamp ? new Date(last.timestamp).toLocaleString() : ""}
         </p>
       </div>
 
-      {/* Map in square card */}
-      <div
-        style={{
-          display: "flex",
-          justifyContent: "center",
-        }}
-      >
+      {/* Map Card */}
+      <div style={{ display: "flex", justifyContent: "center" }}>
         <div
           style={{
-            ...cardStyle,
+            background: "linear-gradient(145deg, #2A244A, #3F3565)",
+            border: "1px solid rgba(255, 77, 128, 0.5)",
+            borderRadius: "10px",
+            padding: "1rem",
+            color: "#fff",
+            boxShadow: "0 0 10px rgba(255, 77, 128, 0.3)",
             width: 600,
             height: 600,
             display: "flex",
             flexDirection: "column",
             alignItems: "center",
             justifyContent: "center",
+            overflow: "visible",
           }}
         >
-          <h2 style={headingStyle}>Device Location Map</h2>
+          <h2 style={{ margin: "0 0 1rem 0", textAlign: "center", color: "#FF4D80" }}>
+            Device Location Map
+          </h2>
           <div
             style={{
               width: "100%",
               height: "100%",
-              minHeight: 270,
-              minWidth: 270,
-              marginTop: 0,
               borderRadius: 8,
-              overflow: "hidden",
-              background: "#252244"
+              overflow: "visible",
+              background: "#252244",
             }}
           >
             <MapLibreGISMap deviceLocations={devices} />
           </div>
         </div>
       </div>
+
+      {/* Chat Icon */}
+      <button
+        aria-label="Open Chat"
+        onClick={() => setShowChat(true)}
+        style={{
+          position: "fixed",
+          right: 110,
+          bottom: 32,
+          zIndex: 999,
+          background: "#2962ff",
+          color: "#fff",
+          borderRadius: "50%",
+          width: 70,
+          height: 70,
+          border: "none",
+          boxShadow: "0 8px 24px #0003",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          fontSize: 36,
+          cursor: "pointer",
+        }}
+      >
+        <FaCommentDots />
+      </button>
+
+      {/* Chat Bubble */}
+      {showChat && <ChatBubble onClose={() => setShowChat(false)} />}
     </div>
   );
 }
-
-const cardStyle = {
-  background: "linear-gradient(145deg, #2A244A, #3F3565)",
-  border: "1px solid rgba(255, 77, 128, 0.5)",
-  borderRadius: "10px",
-  padding: "1rem",
-  minHeight: "650px",
-  color: "#fff",
-  boxShadow: "0 0 10px rgba(255, 77, 128, 0.3)",
-  position: "relative",
-  overflow: "hidden",
-};
-
-const headingStyle = {
-  margin: "0 0 1rem 0",
-  textAlign: "center",
-};
