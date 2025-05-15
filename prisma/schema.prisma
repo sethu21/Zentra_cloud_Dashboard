@@ -41,6 +41,19 @@ model User {
   // NextAuth relations
   accounts      Account[]
   sessions      Session[]
+
+  irrigationSchedules IrrigationSchedule[]
+}
+
+
+model IrrigationSchedule {
+  id          Int      @id @default(autoincrement())
+  userId      Int
+  scheduleAt  DateTime
+  reminderAt  DateTime
+  notified    Boolean  @default(false)
+
+  user        User     @relation(fields:[userId], references:[id], onDelete: Cascade)
 }
 
 /// NextAuth Account model

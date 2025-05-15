@@ -52,6 +52,17 @@ export default function HomePage() {
   const [showPopup, setShowPopup] = useState(false);
   const [showChat, setShowChat] = useState(false);
 
+   useEffect(() => {
+    const tomorrow6 = new Date();
+    tomorrow6.setDate(tomorrow6.getDate() + 1);
+    tomorrow6.setHours(6, 0, 0, 0);
+    fetch("/api/notifications/schedule", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ scheduleAt: tomorrow6.toISOString() }),
+    }).catch(console.error);
+  }, []);
+
   if (error)
     return <div style={{ color: "red", textAlign: "center" }}>Error loading sensor data: {error.message}</div>;
   if (!data)

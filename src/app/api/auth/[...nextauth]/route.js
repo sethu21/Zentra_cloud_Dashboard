@@ -1,4 +1,3 @@
-// File: src/app/api/auth/[...nextauth]/route.js
 import NextAuth from "next-auth";
 import GoogleProvider from "next-auth/providers/google";
 import CredentialsProvider from "next-auth/providers/credentials";
@@ -30,10 +29,34 @@ export const authOptions = {
       },
     }),
   ],
+   callbacks: {
+    async signIn({ user, account, profile }) {
+      if (account.provider === "google") {
+        const existing = await prisma.user.findUnique({
+          where: { email: user.email },
+        });
+        if (existing) {
+          await prisma.account.create({
+            data: {
+              userId: existing.id,
+              type: account.type,
+              provider: account.provider,
+              providerAccountId: account.providerAccountId,
+              access_token: account.access_token,
+              refresh_token: account.refresh_token,
+              expires_at: account.expires_at,
+            },
+          });
+          return true;
+        }
+      }
+      return true; 
+    },
+  },
   session: { strategy: "jwt" },
   pages: {
-    signIn: "/login",     // ← YOUR custom login page
-    newUser: "/register", // ← YOUR custom register page
+    signIn: "/login",     
+    newUser: "/register", 
   },
   secret: process.env.NEXTAUTH_SECRET,
 };

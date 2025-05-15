@@ -41,14 +41,6 @@ export default function Sidebar() {
             <Layers size={18} />
             <span>Mesocosm 2</span>
           </Link>
-          <Link href="/sensor/evapotranspiration_soil" className="flex items-center gap-3 p-3 hover:bg-gray-700 transition rounded">
-            <Droplet size={20} />
-            <span>ET</span>
-          </Link>
-          <Link href="/sensor/summary" className="flex items-center gap-3 p-3 hover:bg-gray-700 transition rounded">
-            <FileText size={20} />
-            <span>Summary</span>
-          </Link>
           <Link href="/settings" className="flex items-center gap-3 p-3 hover:bg-gray-700 transition rounded">
             <Settings size={20} />
             <span>Settings</span>
