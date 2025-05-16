@@ -1,3 +1,4 @@
+// File: src/app/api/auth/[...nextauth]/route.js
 import NextAuth from "next-auth";
 import GoogleProvider from "next-auth/providers/google";
 import CredentialsProvider from "next-auth/providers/credentials";
@@ -5,8 +6,38 @@ import { PrismaAdapter } from "@next-auth/prisma-adapter";
 import { prisma } from "@/lib/prisma";
 import bcrypt from "bcryptjs";
 
+/**
+ * Wrap the PrismaAdapter so that createAccount() will
+ * catch a P2002 (duplicate provider+providerAccountId)
+ * and simply return the existing account instead of erroring.
+ */
+function CustomPrismaAdapter(prisma) {
+  const adapter = PrismaAdapter(prisma);
+  return {
+    ...adapter,
+    async createAccount(account) {
+      try {
+        return await adapter.createAccount(account);
+      } catch (err) {
+        // Prisma’s “unique constraint failed” code
+        if (err.code === "P2002") {
+          return prisma.account.findUnique({
+            where: {
+              provider_providerAccountId: {
+                provider: account.provider,
+                providerAccountId: account.providerAccountId,
+              },
+            },
+          });
+        }
+        throw err;
+      }
+    },
+  };
+}
+
 export const authOptions = {
-  adapter: PrismaAdapter(prisma),
+  adapter: CustomPrismaAdapter(prisma),
   providers: [
     GoogleProvider({
       clientId: process.env.GOOGLE_CLIENT_ID,
@@ -29,34 +60,10 @@ export const authOptions = {
       },
     }),
   ],
-   callbacks: {
-    async signIn({ user, account, profile }) {
-      if (account.provider === "google") {
-        const existing = await prisma.user.findUnique({
-          where: { email: user.email },
-        });
-        if (existing) {
-          await prisma.account.create({
-            data: {
-              userId: existing.id,
-              type: account.type,
-              provider: account.provider,
-              providerAccountId: account.providerAccountId,
-              access_token: account.access_token,
-              refresh_token: account.refresh_token,
-              expires_at: account.expires_at,
-            },
-          });
-          return true;
-        }
-      }
-      return true; 
-    },
-  },
   session: { strategy: "jwt" },
   pages: {
     signIn: "/login",     
-    newUser: "/register", 
+    newUser: "/register",
   },
   secret: process.env.NEXTAUTH_SECRET,
 };
