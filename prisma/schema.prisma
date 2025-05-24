@@ -1,0 +1,96 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider   = "postgresql"
+  url        = env("DATABASE_URL")
+}
+
+
+model EtReading {
+  id          Int      @id @default(autoincrement())
+  timestamp   DateTime
+  port1_wc    Float?
+  port2_wc    Float?
+  port3_wc    Float?
+  port1_se_ec Float?
+  port2_se_ec Float?
+  port3_se_ec Float?
+  port1_temp  Float?
+  port2_temp  Float?
+  port3_temp  Float?
+  port4_wc    Float?
+  port5_wc    Float?
+  port6_wc    Float?
+  port4_se_ec Float?
+  port4_temp  Float?
+}
+
+
+model User {
+  id            Int       @id @default(autoincrement())
+  name          String
+  email         String    @unique
+  emailVerified DateTime? 
+  image         String?
+  phone         String?
+  password      String?
+  createdAt     DateTime  @default(now())
+
+  // NextAuth relations
+  accounts      Account[]
+  sessions      Session[]
+
+  irrigationSchedules IrrigationSchedule[]
+} /// its not good idea to have password like this, need to find better way 
+
+
+model IrrigationSchedule {
+  id          Int      @id @default(autoincrement())
+  userId      Int
+  scheduleAt  DateTime
+  reminderAt  DateTime
+  notified    Boolean  @default(false)
+
+  user        User     @relation(fields:[userId], references:[id], onDelete: Cascade)
+}
+
+/// NextAuth Account model
+model Account {
+  id                String   @id @default(cuid())
+  userId            Int
+  type              String
+  provider          String
+  providerAccountId String
+  refresh_token     String?  
+  access_token      String?  
+  expires_at        Int?     
+  token_type        String?  
+  scope             String?  
+  id_token          String?  
+  session_state     String?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+}
+
+/// NextAuth Session model
+model Session {
+  id           String   @id @default(cuid())
+  sessionToken String   @unique
+  userId       Int
+  expires      DateTime
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+/// NextAuth VerificationToken model 
+model VerificationToken {
+  identifier String
+  token      String   @unique
+  expires    DateTime
+
+  @@unique([identifier, token])
+}
