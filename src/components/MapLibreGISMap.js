@@ -138,13 +138,10 @@ export default function MapLibreGISMap({ deviceLocations, geoJsonData }) {
           "circle-stroke-width": 2,
         },
       });
-
-      // Add popups on click for device markers
       mapRef.current.on("click", "device-markers", (e) => {
         const coordinates = e.features[0].geometry.coordinates.slice();
         const { name, temp, wc, ec, timestamp } = e.features[0].properties;
 
-        // Ensure the popup appears above the marker
         while (Math.abs(e.lngLat.lng - coordinates[0]) > 180) {
           coordinates[0] += e.lngLat.lng > coordinates[0] ? 360 : -360;
         }
@@ -172,8 +169,6 @@ export default function MapLibreGISMap({ deviceLocations, geoJsonData }) {
           `)
           .addTo(mapRef.current);
       });
-
-      // Change cursor to pointer on hover for device markers
       mapRef.current.on("mouseenter", "device-markers", () => {
         mapRef.current.getCanvas().style.cursor = "pointer";
       });
@@ -181,27 +176,26 @@ export default function MapLibreGISMap({ deviceLocations, geoJsonData }) {
         mapRef.current.getCanvas().style.cursor = "";
       });
 
-      // Add GeoJSON overlay if geoJsonData is provided
+      
       if (geoJsonData) {
-        // Add GeoJSON source
         mapRef.current.addSource("soil-types", {
           type: "geojson",
           data: geoJsonData,
         });
 
-        // Add GeoJSON layer
+        // GeoJSON layer
         mapRef.current.addLayer({
           id: "soil-types-layer",
           type: "fill",
           source: "soil-types",
           paint: {
-            "fill-color": "#ff7800", // Orange color for soil type boundary
+            "fill-color": "#ff7800", // color for soil type boundary
             "fill-opacity": 0.5,
             "fill-outline-color": "#ff7800",
           },
         });
 
-        // Add popups for GeoJSON layer
+        // Adds popups for GeoJSON layer
         mapRef.current.on("click", "soil-types-layer", (e) => {
           const coordinates = e.lngLat;
           const { name } = e.features[0].properties;
@@ -216,7 +210,6 @@ export default function MapLibreGISMap({ deviceLocations, geoJsonData }) {
             .addTo(mapRef.current);
         });
 
-        // Change cursor to pointer on hover for GeoJSON layer
         mapRef.current.on("mouseenter", "soil-types-layer", () => {
           mapRef.current.getCanvas().style.cursor = "pointer";
         });
@@ -226,7 +219,7 @@ export default function MapLibreGISMap({ deviceLocations, geoJsonData }) {
       }
     });
 
-    // Add a legend for water content and GeoJSON layer
+    // legend for water content and GeoJSON layer
     const legendDiv = document.createElement("div");
     legendDiv.style.position = "absolute";
     legendDiv.style.bottom = "10px";
@@ -271,7 +264,7 @@ export default function MapLibreGISMap({ deviceLocations, geoJsonData }) {
       ref={mapContainerRef}
       style={{
         width: "100%",
-        height: "600px", // Match the height of the donut cards
+        height: "600px", 
         borderRadius: "8px",
         overflow: "hidden",
         border: "1px solid #4a4a4a",

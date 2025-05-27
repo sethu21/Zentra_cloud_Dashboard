@@ -1,54 +1,79 @@
 require("dotenv").config();
 const { PrismaClient } = require("@prisma/client");
-const nodemailer       = require("nodemailer");
-const Twilio           = require("twilio");
+const nodemailer = require("nodemailer");
+const Twilio = require("twilio");
 
-const prisma = new PrismaClient();
-const mailer = nodemailer.createTransport({
-  host:    process.env.SMTP_HOST,
-  port:    +process.env.SMTP_PORT,
-  secure:  false, 
-  auth:    {
-    user: process.env.SMTP_USER,
-    pass: process.env.SMTP_PASS,
-  },
+const db = new PrismaClient();
+
+// basic SMTP mail sender setup (seems to work fine)
+const emailer = nodemailer.createTransport({
+    host: process.env.SMTP_HOST,
+    port: +process.env.SMTP_PORT,
+    secure: false,
+    auth: {
+        user: process.env.SMTP_USER,
+        pass: process.env.SMTP_PASS,
+    },
 });
-const twilio = Twilio(process.env.TWILIO_SID, process.env.TWILIO_TOKEN);
 
+// SMS via Twilio (credits may run out quick so check balance)
+const sms = Twilio(process.env.TWILIO_SID, process.env.TWILIO_TOKEN);
+
+// main job to scan DB and send any reminders due now-ish
 async function checkAndSend() {
-  const now = new Date();
-  const due = await prisma.irrigationSchedule.findMany({
-    where: { reminderAt: { lte: now }, notified: false },
-    include: { user: true },
-  });
+    const nowTime = new Date();
 
-  for (const rec of due) {
-    const { user, scheduleAt, id } = rec;
-
-    await mailer.sendMail({
-      from:    process.env.SMTP_FROM,
-      to:      user.email,
-      subject: "⏰ Irrigation Reminder",
-      text: `
-      Hello ${user.name},This is your 30-minute reminder to irrigate at ${new Date(scheduleAt).toLocaleString()}.– Your Decision Support System`,
+    const tasks = await db.irrigationSchedule.findMany({
+        where: {
+            reminderAt: {
+                lte: nowTime
+            },
+            notified: false,
+        },
+        include: {
+            user: true
+        }
     });
 
-    if (user.phone) {
-      await twilio.messages.create({
-        from: process.env.TWILIO_FROM,
-        to:   user.phone,
-        body: `Reminder: irrigate at ${new Date(scheduleAt).toLocaleTimeString()}.`,
-      });
+    for (const task of tasks) {
+        const { user, scheduleAt, id } = task;
+
+        // send email
+        try {
+            await emailer.sendMail({
+                from: process.env.SMTP_FROM,
+                to: user.email,
+                subject: "⏰ Irrigation Reminder",
+                text: `Hey ${user.name}, don't forget to irrigate around ${new Date(scheduleAt).toLocaleString()}. This is your 30-min heads-up from DSS.`,
+            });
+        } catch (mailErr) {
+            console.error("email issue:", mailErr.message);
+        }
+
+        // if phone is available, also SMS them
+        if (user.phone) {
+            try {
+                await sms.messages.create({
+                    from: process.env.TWILIO_FROM,
+                    to: user.phone,
+                    body: `Irrigation time soon: ${new Date(scheduleAt).toLocaleTimeString()}`,
+                });
+            } catch (smsErr) {
+                console.error("sms issue:", smsErr.message);
+            }
+        }
+
+        // flag this reminder as done so we don't spam
+        await db.irrigationSchedule.update({
+            where: { id },
+            data: { notified: true },
+        });
     }
-
-    
-    await prisma.irrigationSchedule.update({
-      where: { id },
-      data:  { notified: true },
-    });
-  }
 }
 
 
-checkAndSend().catch(console.error);
+// run right away once, then every minute
+checkAndSend().catch(err => {
+    console.error("initial run failed:", err.message);
+});
 setInterval(checkAndSend, 60 * 1000);
