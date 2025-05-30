@@ -62,7 +62,7 @@ const buckets = noData
   });
 
 
-  // per-port ET from those end-of-bucket values
+  // 2) per-port ET from those end-of-bucket values
   const port1ET = estimateETByPort(aggregated, "p1_wc", 200);  // 15 cm
   const port2ET = estimateETByPort(aggregated, "p2_wc", 150);  // 30 cm
   const port3ET = estimateETByPort(aggregated, "p3_wc", 150);  // 45 cm

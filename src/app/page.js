@@ -76,7 +76,8 @@ export default function HomePage() {
 
   let combinedET = [];
   if (readings && weatherData) {
-    combinedET = estimateTotalET(readings, weatherData, "5min");
+      const totalET = estimateTotalET(readings, "Mesocosm1");
+      combinedET = totalET.map((val, i, arr) => i === 0 ? 0 : val - arr[i - 1]);
   }
   const rainSeries =
     weatherData?.hourly?.rain?.slice(0, combinedET.length) || Array(combinedET.length).fill(0);
